@@ -17,12 +17,10 @@ from database import (
     create_flash_post, create_product, create_purchase_request,
     deactivate_product, get_db, get_flash_duration, get_flash_post,
     get_product, get_product_media, has_already_requested,
-    list_active_products, set_setting, get_setting  # get_setting qo'shildi
+    list_active_products, set_setting
 )
 
 logger = logging.getLogger(__name__)
-
-# ── FSM ──────────────────────────────────────────────────
 
 class AddProduct(StatesGroup):
     collect_media    = State()
@@ -33,8 +31,6 @@ class AddProduct(StatesGroup):
 
 class ChangeInterval(StatesGroup):
     waiting = State()
-
-# ── Klaviaturalar ─────────────────────────────────────────
 
 def kb_ready():
     kb = InlineKeyboardMarkup()
@@ -64,26 +60,19 @@ def kb_admin_panel():
     )
     return kb
 
-# ── Handlerlarni ro'yxatdan o'tkazish ────────────────────
-
 def register(dp: Dispatcher):
-    # Setup
     dp.register_my_chat_member_handler(on_bot_added)
     dp.register_callback_query_handler(cb_select_group, lambda c: c.data.startswith("select_group:"))
-
-    # Admin panel
-    dp.register_message_handler(cmd_flash,  commands=["flash"])
-    dp.register_message_handler(cmd_status, commands=["status"])
-    dp.register_message_handler(cmd_set_group, commands=["setgroup"]) # <-- YANGI
-    
+    dp.register_message_handler(cmd_start,    commands=["start"])
+    dp.register_message_handler(cmd_flash,    commands=["flash"])
+    dp.register_message_handler(cmd_status,   commands=["status"])
+    dp.register_message_handler(cmd_setgroup, commands=["setgroup"])
     dp.register_callback_query_handler(cb_panel_add,      lambda c: c.data == "panel_add")
     dp.register_callback_query_handler(cb_panel_list,     lambda c: c.data == "panel_list")
     dp.register_callback_query_handler(cb_panel_interval, lambda c: c.data == "panel_interval")
     dp.register_callback_query_handler(cb_panel_send_now, lambda c: c.data == "panel_send_now")
     dp.register_callback_query_handler(cb_panel_back,     lambda c: c.data == "panel_back")
     dp.register_callback_query_handler(cb_del_product,    lambda c: c.data.startswith("del_product:"))
-
-    # FSM — media
     dp.register_message_handler(fsm_collect_media, content_types=["photo","video"], state=AddProduct.collect_media)
     dp.register_callback_query_handler(cb_media_ready, lambda c: c.data == "media_ready", state=AddProduct.collect_media)
     dp.register_message_handler(fsm_got_name,        content_types=["text"], state=AddProduct.wait_name)
@@ -91,15 +80,9 @@ def register(dp: Dispatcher):
     dp.register_message_handler(fsm_got_price,       content_types=["text"], state=AddProduct.wait_price)
     dp.register_callback_query_handler(cb_confirm, lambda c: c.data == "product_confirm", state=AddProduct.confirm)
     dp.register_callback_query_handler(cb_cancel,  lambda c: c.data == "product_cancel",  state=AddProduct.confirm)
-
-    # FSM — interval
     dp.register_callback_query_handler(cb_panel_interval_prompt, lambda c: c.data == "panel_interval")
     dp.register_message_handler(fsm_set_interval, content_types=["text"], state=ChangeInterval.waiting)
-
-    # Buy
     dp.register_callback_query_handler(cb_buy, lambda c: c.data.startswith("buy:"))
-
-# ── Bot guruhga qo'shildi ─────────────────────────────────
 
 async def on_bot_added(event: types.ChatMemberUpdated, bot: Bot):
     chat = event.chat
@@ -137,8 +120,6 @@ async def cb_select_group(call: types.CallbackQuery):
     )
     await call.answer("✅ Saqlandi!")
 
-# ── Admin panel ───────────────────────────────────────────
-
 async def cmd_flash(message: types.Message):
     if message.from_user.id != config.admin_id:
         return
@@ -154,44 +135,19 @@ async def cmd_flash(message: types.Message):
 async def cmd_status(message: types.Message, bot: Bot):
     if message.from_user.id != config.admin_id:
         return
-    # Statusda ham bazani tekshiramiz
-    db_id = await get_setting("group_chat_id")
-    try:
-        current_id = int(db_id) if db_id and db_id != "0" else config.group_chat_id
-    except:
-        current_id = config.group_chat_id
-    
-    if current_id == 0:
+    await load_group_chat_id()
+    if config.group_chat_id == 0:
         g = "❌ Guruh sozlanmagan"
     else:
         try:
-            chat = await bot.get_chat(current_id)
-            g = f"✅ {chat.title} (<code>{current_id}</code>)"
+            chat = await bot.get_chat(config.group_chat_id)
+            g = f"✅ {chat.title} (<code>{config.group_chat_id}</code>)"
         except Exception:
-            g = f"✅ <code>{current_id}</code>"
+            g = f"✅ <code>{config.group_chat_id}</code>"
     await message.answer(
         f"⚙️ <b>Bot holati</b>\n\nAdmin: <code>{config.admin_id}</code>\nGuruh: {g}",
         parse_mode="HTML"
     )
-
-async def cmd_set_group(message: types.Message):
-    if message.from_user.id != config.admin_id:
-        return
-    if message.chat.type not in ("group", "supergroup"):
-        await message.answer("❌ Bu buyruqni faqat guruh ichida yozish kerak!"); return
-
-    chat_id = message.chat.id
-    await save_group_chat_id(chat_id)
-    
-    await message.answer(
-        f"✅ <b>Guruh muvaffaqiyatli tanlandi!</b>\n\n"
-        f"📌 Nomi: <b>{message.chat.title}</b>\n"
-        f"🆔 ID: <code>{chat_id}</code>\n\n"
-        f"Endi bot xabarlarni aynan shu yerga yuboradi.",
-        parse_mode="HTML"
-    )
-
-# ── Qolgan handlerlar ─────────────────────────────────────
 
 async def cb_panel_add(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer(
@@ -236,12 +192,28 @@ async def cb_panel_interval_prompt(call: types.CallbackQuery, state: FSMContext)
     pass
 
 async def cb_panel_send_now(call: types.CallbackQuery, bot: Bot):
+    await load_group_chat_id()  # ← har safar bazadan fresh o'qiydi
+    if config.group_chat_id == 0:
+        await call.answer(
+            "❌ Guruh ulanmagan!\n/setgroup -100xxxxxxxxx yuboring.",
+            show_alert=True
+        )
+        return
     products = await list_active_products()
     if not products:
         await call.answer("❌ Aktiv mahsulot yo'q!", show_alert=True); return
     product = dict(random.choice(products))
-    await _send_flash_post(bot, product)
-    await call.answer("📤 Yuborildi!")
+    try:
+        await _send_flash_post(bot, product)
+        await call.answer("📤 Yuborildi!")
+    except Exception as e:
+        logger.error("Yuborishda xato: %s", e)
+        await bot.send_message(
+            config.admin_id,
+            f"❌ <b>Yuborishda xato:</b>\n<code>{e}</code>",
+            parse_mode="HTML"
+        )
+        await call.answer("❌ Xato! Botga qarang.", show_alert=True)
 
 async def cb_panel_back(call: types.CallbackQuery):
     duration = await get_flash_duration()
@@ -253,8 +225,6 @@ async def cb_panel_back(call: types.CallbackQuery):
         parse_mode="HTML", reply_markup=kb_admin_panel()
     )
     await call.answer()
-
-# ── FSM — Media ───────────────────────────────────────────
 
 async def fsm_collect_media(message: types.Message, state: FSMContext):
     data  = await state.get_data()
@@ -351,115 +321,114 @@ async def fsm_set_interval(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer(f"✅ Muddat <b>{raw} daqiqa</b> qilindi.", parse_mode="HTML", reply_markup=kb_admin_panel())
 
-# ── Guruhga yuborish ──────────────────────────────────────
-
 async def _send_flash_post(bot: Bot, product: dict):
     from datetime import datetime, timedelta
     from scheduler import schedule_post_expiry
     pid      = product["id"]
     duration = await get_flash_duration()
-    
-    # 1. Bazadan ID ni olamiz
-    db_chat_id = await get_setting("group_chat_id")
-    
-    # 2. ID ni butun son formatiga o'tkazamiz (MUHIM!) 
-    try:
-        if db_chat_id and db_chat_id != "0":
-            target_chat_id = int(db_chat_id)
-        else:
-            target_chat_id = int(config.group_chat_id)
-    except (ValueError, TypeError):
-        target_chat_id = 0
-    
-    if not target_chat_id or target_chat_id == 0:
-        await bot.send_message(config.admin_id, "❌ Guruh sozlanmagan! Guruhda /setgroup deb yozing.")
+    if config.group_chat_id == 0:
+        await bot.send_message(config.admin_id, "❌ <b>Guruh ulanmagan!</b>", parse_mode="HTML")
         return
-
     media_rows = await get_product_media(pid)
     if not media_rows:
         await bot.send_message(config.admin_id, f"⚠️ <code>{pid}</code> uchun media yo'q!", parse_mode="HTML"); return
-
     input_media = []
     for row in media_rows:
         if row["media_type"] == "photo":
             input_media.append(InputMediaPhoto(media=row["file_id"]))
         else:
             input_media.append(InputMediaVideo(media=row["file_id"]))
-
-    try:
-        # Guruhga yuborish (chat_id endi integer) 
-        sent_album = await bot.send_media_group(chat_id=target_chat_id, media=input_media)
-        album_ids  = [m.message_id for m in sent_album]
-
-        expires_at = datetime.now() + timedelta(minutes=duration)
-        post_id    = await create_flash_post(pid, target_chat_id, album_ids, 0, expires_at)
-
-        caption  = build_group_caption(product["id"], product["name"], product["description"],
-                                        product["sale_price"], product["original_price"], duration)
-        
-        text_msg = await bot.send_message(
-            chat_id=target_chat_id,
-            text=caption,
-            parse_mode="HTML",
-            reply_to_message_id=sent_album[0].message_id,
-            reply_markup=kb_buy(post_id, pid)
-        )
-
-        async with get_db() as db:
-            await db.execute("UPDATE flash_posts SET text_message_id=? WHERE id=?", (text_msg.message_id, post_id))
-            await db.commit()
-
-        await schedule_post_expiry(bot, post_id, duration * 60)
-        logger.info("✅ Flash post yuborildi: %s post_id=%d", pid, post_id)
-        
-    except Exception as e:
-        logger.error(f"Yuborishda xato: {e}")
-        await bot.send_message(config.admin_id, f"❌ Guruhga yuborishda xato: <code>{e}</code>")
-
-# ── Sotib olaman ──────────────────────────────────────────
+    sent_album = await bot.send_media_group(config.group_chat_id, media=input_media)
+    album_ids  = [m.message_id for m in sent_album]
+    expires_at = datetime.now() + timedelta(minutes=duration)
+    post_id    = await create_flash_post(pid, config.group_chat_id, album_ids, 0, expires_at)
+    caption  = build_group_caption(product["id"], product["name"], product["description"],
+                                    product["sale_price"], product["original_price"], duration)
+    text_msg = await bot.send_message(
+        config.group_chat_id, caption,
+        parse_mode="HTML",
+        reply_to_message_id=sent_album[0].message_id,
+        reply_markup=kb_buy(post_id, pid)
+    )
+    async with get_db() as db:
+        await db.execute("UPDATE flash_posts SET text_message_id=? WHERE id=?", (text_msg.message_id, post_id))
+        await db.commit()
+    await schedule_post_expiry(bot, post_id, duration * 60)
+    logger.info("✅ Flash post yuborildi: %s post_id=%d", pid, post_id)
 
 async def cb_buy(call: types.CallbackQuery, bot: Bot):
     parts      = call.data.split(":", 2)
     post_id    = int(parts[1])
     product_id = parts[2]
-
     post = await get_flash_post(post_id)
     if not post or post["is_expired"]:
         await call.answer("⛔️ Aksiya yakunlangan!", show_alert=True); return
-
     buyer = call.from_user
     if await has_already_requested(post_id, buyer.id):
         await call.answer("ℹ️ Allaqachon so'rov yuborgansiz!", show_alert=True); return
-
     product = await get_product(product_id)
     if not product:
         await call.answer("❌ Mahsulot topilmadi.", show_alert=True); return
-
     await create_purchase_request(post_id, product_id, buyer.id, buyer.username, buyer.full_name)
-
-    # Bazadan chat ID ni yana bir bor tekshirish
-    db_chat_id = await get_setting("group_chat_id")
-    try:
-        target_chat_id = int(db_chat_id) if db_chat_id and db_chat_id != "0" else config.group_chat_id
-    except:
-        target_chat_id = config.group_chat_id
-
     uname = f"@{buyer.username}" if buyer.username else f"<b>{buyer.full_name}</b>"
-    
-    if target_chat_id != 0:
-        try:
-            await bot.send_message(
-                target_chat_id,
-                f"🎉 {uname} ushbu mahsulotni (<code>{product_id}</code>) xarid qilmoqchi!\n"
-                "👥 <i>Adminlar tez orada aloqaga chiqadi.</i>",
-                parse_mode="HTML",
-                reply_to_message_id=post["text_message_id"]
-            )
-        except: pass
-        
+    await bot.send_message(
+        config.group_chat_id,
+        f"🎉 {uname} ushbu mahsulotni (<code>{product_id}</code>) xarid qilmoqchi!\n"
+        "👥 <i>Adminlar tez orada aloqaga chiqadi.</i>",
+        parse_mode="HTML",
+        reply_to_message_id=post["text_message_id"]
+    )
     await bot.send_message(
         config.admin_id,
         build_admin_notify(buyer.full_name, buyer.username, buyer.id, product_id, product["name"], product["sale_price"]),
         parse_mode="HTML"
     )
     await call.answer("✅ So'rovingiz qabul qilindi! Admin tez orada bog'lanadi.", show_alert=True)
+
+async def cmd_start(message: types.Message):
+    if message.from_user.id == config.admin_id:
+        await message.answer(
+            "👋 <b>Salom, Admin!</b>\n\n"
+            "⚡️ Flash Sale botiga xush kelibsiz!\n\n"
+            "📌 <b>Buyruqlar:</b>\n"
+            "• /flash — Admin panelni ochish\n"
+            "• /status — Bot holati\n"
+            "• /setgroup -100xxx — Guruhni ulash\n\n"
+            "Boshlash uchun /flash yuboring 👇",
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            "👋 <b>Salom!</b>\n\n"
+            "🛍 Bu Flash Sale savdo boti.\n"
+            "Aksiyalarni kuzatish uchun guruhimizga qo'shiling!",
+            parse_mode="HTML"
+        )
+
+async def cmd_setgroup(message: types.Message):
+    if message.from_user.id != config.admin_id:
+        return
+    args = message.get_args().strip()
+    if not args:
+        await message.answer(
+            "📌 <b>Guruh ID ni kiritish:</b>\n\n"
+            "<code>/setgroup -1001234567890</code>\n\n"
+            "ID ni bilish: guruhga @RawDataBot qo'shing",
+            parse_mode="HTML"
+        )
+        return
+    try:
+        chat_id = int(args)
+        await save_group_chat_id(chat_id)
+        try:
+            chat = await message.bot.get_chat(chat_id)
+            name = chat.title
+        except Exception:
+            name = str(chat_id)
+        await message.answer(
+            f"✅ <b>Guruh sozlandi!</b>\n\n"
+            f"📣 {name}\n🆔 <code>{chat_id}</code>",
+            parse_mode="HTML", reply_markup=kb_admin_panel()
+        )
+    except ValueError:
+        await message.answer("❌ Noto'g'ri format. Misol: <code>/setgroup -1001234567890</code>", parse_mode="HTML")
