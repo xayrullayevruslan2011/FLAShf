@@ -74,7 +74,7 @@ def register(dp: Dispatcher):
     # Admin panel
     dp.register_message_handler(cmd_flash,  commands=["flash"])
     dp.register_message_handler(cmd_status, commands=["status"])
-    dp.register_message_handler(cmd_set_group, commands=["setgroup"])
+    dp.register_message_handler(cmd_set_group, commands=["setgroup"]) # <-- YANGI
     
     dp.register_callback_query_handler(cb_panel_add,      lambda c: c.data == "panel_add")
     dp.register_callback_query_handler(cb_panel_list,     lambda c: c.data == "panel_list")
@@ -170,6 +170,8 @@ async def cmd_status(message: types.Message, bot: Bot):
         f"⚙️ <b>Bot holati</b>\n\nAdmin: <code>{config.admin_id}</code>\nGuruh: {g}",
         parse_mode="HTML"
     )
+
+# ── YANGI: Guruhni buyruq orqali sozlash ──────────────────
 
 async def cmd_set_group(message: types.Message):
     if message.from_user.id != config.admin_id:
