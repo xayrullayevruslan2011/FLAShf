@@ -9,7 +9,7 @@ class Config:
     def __init__(self):
         self.bot_token     = os.environ.get("BOT_TOKEN", "")
         self.admin_id      = int(os.environ.get("ADMIN_ID", "0"))
-        self.group_chat_id = -1001234567890
+        self.group_chat_id = int(os.environ.get("GROUP_CHAT_ID", "0"))
         if not self.bot_token:
             raise ValueError("BOT_TOKEN topilmadi!")
 
@@ -19,14 +19,11 @@ MARKUP_PERCENT = 15.0
 
 async def load_group_chat_id():
     from database import get_setting
-    # "group_chat_id" bu bazadagi kalit so'z (key)
-    value = await get_setting("group_chat_id") 
+    # Avval bazadan tekshiramiz (admin /setgroup bilan o'zgartirgan bo'lsa)
+    value = await get_setting("group_chat_id")
     if value and value != "0":
         config.group_chat_id = int(value)
-    else:
-        # Agar bazada hali yo'q bo'lsa, o'zingizning guruh ID-ingizni 
-        # vaqtincha shu yerga yozib qo'ysangiz ham bo'ladi
-        config.group_chat_id = -1001234567890
+    # Aks holda GROUP_CHAT_ID env var dan olgan qiymat qoladi
 
 async def save_group_chat_id(chat_id: int):
     from database import set_setting
