@@ -17,10 +17,9 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-# database.py ning boshida DB_PATH ni shunday yozing:
 import os
-DB_PATH = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(DB_PATH, "database.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 # ════════════════════════════════════════════════════════════
 #  DDL — Jadvallar
