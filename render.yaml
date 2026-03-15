@@ -1,0 +1,17 @@
+services:
+  - type: worker
+    name: flash-sale-bot
+    runtime: python
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "python main.py"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_ID
+        sync: false
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: bot-data
+      mountPath: /data
+      sizeGB: 1
