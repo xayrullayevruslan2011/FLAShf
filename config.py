@@ -19,9 +19,14 @@ MARKUP_PERCENT = 15.0
 
 async def load_group_chat_id():
     from database import get_setting
-    value = await get_setting("group_chat_id")
+    # "group_chat_id" bu bazadagi kalit so'z (key)
+    value = await get_setting("group_chat_id") 
     if value and value != "0":
         config.group_chat_id = int(value)
+    else:
+        # Agar bazada hali yo'q bo'lsa, o'zingizning guruh ID-ingizni 
+        # vaqtincha shu yerga yozib qo'ysangiz ham bo'ladi
+        config.group_chat_id = -1003639623716
 
 async def save_group_chat_id(chat_id: int):
     from database import set_setting
