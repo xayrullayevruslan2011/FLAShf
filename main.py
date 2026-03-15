@@ -22,6 +22,19 @@ dp      = Dispatcher(bot, storage=storage)
 
 register(dp)
 
+# --- Flask Web Server Sozlamalari ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot muvaffaqiyatli ishlayapti!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    # use_reloader=False qo'yish muhim, aks holda bot ikki marta ishga tushib ketishi mumkin
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
+# ------------------------------------
+
 async def on_start(dp: Dispatcher):
     await on_startup(bot)
     await load_group_chat_id()
@@ -41,24 +54,8 @@ async def on_stop(dp: Dispatcher):
     await on_shutdown()
 
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True, on_startup=on_start, on_shutdown=on_stop)
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot muvaffaqiyatli ishlayapti!"
-
-def run_web():
-    # Render o'zi beradigan PORT ni olamiz, topa olmasa 10000 ishlatamiz
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-# ... sizning qolgan barcha kodlaringiz ...
-
-if __name__ == '__main__':
-    # 1. Oldin veb-serverni alohida jarayonda (thread) ishga tushiramiz
+    # 1. Veb-serverni orqa fonda ishga tushiramiz
     Thread(target=run_web).start()
     
-    # 2. Keyin botingizni ishga tushiramiz (sizning kodingiz)
-    # Eslatma: on_startup va on_shutdown qanday bo'lsa shunday qoldiring
-    executor.start_polling(dp, skip_updates=True, on_startup=on_startup, on_shutdown=on_shutdown)
+    # 2. Keyin botni ishga tushiramiz (faqat bitta start_polling bo'lishi kerak)
+    executor.start_polling(dp, skip_updates=True, on_startup=on_start, on_shutdown=on_stop)
