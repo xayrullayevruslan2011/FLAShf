@@ -1,17 +1,26 @@
 # config.py
 from __future__ import annotations
-import os, random, string
+import os, random, string, logging
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 class Config:
     def __init__(self):
+        # Render Environment Variables (Muhit o'zgaruvchilari)
         self.bot_token     = os.environ.get("BOT_TOKEN", "")
         self.admin_id      = int(os.environ.get("ADMIN_ID", "0"))
-        self.group_chat_id = int(os.environ.get("GROUP_CHAT_ID", "0"))
+        
+        # Dastlabki qiymatni o'qish (matn bo'lsa songa o'tkazish)
+        group_id_env = os.environ.get("GROUP_CHAT_ID", "0")
+        try:
+            self.group_chat_id = int(group_id_env)
+        except ValueError:
+            self.group_chat_id = 0
+
         if not self.bot_token:
-            raise ValueError("BOT_TOKEN topilmadi!")
+            raise ValueError("BOT_TOKEN topilmadi! Render sozlamalarini tekshiring.")
 
 config = Config()
 
@@ -19,16 +28,22 @@ MARKUP_PERCENT = 15.0
 
 async def load_group_chat_id():
     from database import get_setting
-    # Avval bazadan tekshiramiz (admin /setgroup bilan o'zgartirgan bo'lsa)
-    value = await get_setting("group_chat_id")
-    if value and value != "0":
-        config.group_chat_id = int(value)
-    # Aks holda GROUP_CHAT_ID env var dan olgan qiymat qoladi
+    try:
+        # Avval bazadan tekshiramiz (bu eng muhimi!)
+        value = await get_setting("group_chat_id")
+        if value and value != "0":
+            config.group_chat_id = int(value)
+            logger.info(f"✅ Guruh ID bazadan o'qildi: {config.group_chat_id}")
+        else:
+            logger.warning(f"⚠️ Guruh ID bazada topilmadi, Environment ishlatilyapti: {config.group_chat_id}")
+    except Exception as e:
+        logger.error(f"❌ Guruh ID yuklashda xato: {e}")
 
 async def save_group_chat_id(chat_id: int):
     from database import set_setting
     config.group_chat_id = chat_id
     await set_setting("group_chat_id", str(chat_id))
+    logger.info(f"💾 Guruh ID bazaga saqlandi: {chat_id}")
 
 def generate_product_id():
     digits = "".join(random.choices(string.digits, k=4))

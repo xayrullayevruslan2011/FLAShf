@@ -30,10 +30,13 @@ async def on_start(dp: Dispatcher):
     await on_startup(bot)
     await load_group_chat_id()
 
+# Bot o'chirilganda jarayonlarni toza to'xtatish uchun
+async def on_stop(dp: Dispatcher):
+    await on_shutdown()
+
 if __name__ == "__main__":
     # DIQQAT: Flaskni alohida thread'da botdan OLDIN yoqamiz
     Thread(target=run_flask, daemon=True).start()
     
-    # Keyin botni boshlaymiz
-    executor.start_polling(dp, skip_updates=True, on_startup=on_start)
-    
+    # Keyin botni boshlaymiz (on_shutdown ham qo'shildi)
+    executor.start_polling(dp, skip_updates=True, on_startup=on_start, on_shutdown=on_stop)

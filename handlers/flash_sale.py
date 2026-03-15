@@ -207,13 +207,34 @@ async def cb_panel_interval(call: types.CallbackQuery):
 async def cb_panel_interval_prompt(call: types.CallbackQuery, state: FSMContext):
     pass  # cb_panel_interval handles it
 
+# DIQQAT: MANA SHU FUNKSIYAGA O'ZGARISH KIRITILDI (XATOLARNI USHLASH UCHUN)
 async def cb_panel_send_now(call: types.CallbackQuery, bot: Bot):
+    if config.group_chat_id == 0:
+        await call.answer("❌ Guruh ID si '0'. Render sozlamalarida GROUP_CHAT_ID ni tekshiring!", show_alert=True)
+        return
+
     products = await list_active_products()
     if not products:
-        await call.answer("❌ Aktiv mahsulot yo'q!", show_alert=True); return
+        await call.answer("❌ Aktiv mahsulot yo'q!", show_alert=True)
+        return
+
     product = dict(random.choice(products))
-    await _send_flash_post(bot, product)
-    await call.answer("📤 Yuborildi!")
+    
+    try:
+        # Agar hamma narsa to'g'ri bo'lsa, xabar guruhga uchadi
+        await _send_flash_post(bot, product)
+        await call.answer("📤 Guruhga yuborildi!", show_alert=True)
+    except Exception as e:
+        # Agar qayerdadir xato bo'lsa (ID xato, ruxsat yo'q), bot jim turmasdan sizga aytadi
+        logger.error(f"Xatolik: {e}")
+        await call.message.answer(
+            f"❌ <b>Guruhga yuborishda xatolik yuz berdi!</b>\n\n"
+            f"<b>Sabab:</b> <code>{e}</code>\n"
+            f"<b>Guruh ID:</b> <code>{config.group_chat_id}</code>\n\n"
+            f"<i>Bot guruhda admin ekanligini va ID to'g'riligini tekshiring.</i>",
+            parse_mode="HTML"
+        )
+        await call.answer("Yuborishda xato!", show_alert=True)
 
 async def cb_panel_back(call: types.CallbackQuery):
     duration = await get_flash_duration()
