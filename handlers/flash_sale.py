@@ -352,36 +352,23 @@ async def fsm_set_interval(message: types.Message, state: FSMContext):
 
 # ── Guruhga yuborish ──────────────────────────────────────
 
-# handlers/flash_sale.py ichidagi _send_flash_post funksiyasini shu bilan almashtiring:
-
 async def _send_flash_post(bot: Bot, product: dict):
     from datetime import datetime, timedelta
     from scheduler import schedule_post_expiry
-    from database import get_setting
-    
     pid      = product["id"]
     duration = await get_flash_duration()
     
-    # 1. Bazadan ID ni olamiz
+    # Guruh ID ni to'g'ridan-to'g'ri bazadan olamiz
     db_chat_id = await get_setting("group_chat_id")
+    target_chat_id = int(db_chat_id) if db_chat_id and db_chat_id != "0" else config.group_chat_id
     
-    # 2. ID ni tekshiramiz va son ko'rinishiga o'tkazamiz (MUHIM!)
-    try:
-        if db_chat_id and db_chat_id != "0":
-            target_chat_id = int(db_chat_id)
-        else:
-            target_chat_id = config.group_chat_id
-    except (ValueError, TypeError):
-        target_chat_id = config.group_chat_id
-
-    # 3. Agar ID baribir 0 bo'lsa, to'xtatamiz
-    if not target_chat_id or target_chat_id == 0:
+    if target_chat_id == 0:
         await bot.send_message(config.admin_id, "❌ Guruh sozlanmagan! Guruhda /setgroup deb yozing.")
         return
 
     media_rows = await get_product_media(pid)
     if not media_rows:
-        await bot.send_message(config.admin_id, f"⚠️ {pid} uchun media topilmadi!"); return
+        await bot.send_message(config.admin_id, f"⚠️ <code>{pid}</code> uchun media yo'q!", parse_mode="HTML"); return
 
     input_media = []
     for row in media_rows:
@@ -391,8 +378,7 @@ async def _send_flash_post(bot: Bot, product: dict):
             input_media.append(InputMediaVideo(media=row["file_id"]))
 
     try:
-        # Guruhga albomni yuborish
-        sent_album = await bot.send_media_group(chat_id=target_chat_id, media=input_media)
+        sent_album = await bot.send_media_group(target_chat_id, media=input_media)
         album_ids  = [m.message_id for m in sent_album]
 
         expires_at = datetime.now() + timedelta(minutes=duration)
@@ -400,11 +386,8 @@ async def _send_flash_post(bot: Bot, product: dict):
 
         caption  = build_group_caption(product["id"], product["name"], product["description"],
                                         product["sale_price"], product["original_price"], duration)
-        
-        # Asosiy matnli xabarni yuborish
         text_msg = await bot.send_message(
-            chat_id=target_chat_id, 
-            text=caption,
+            target_chat_id, caption,
             parse_mode="HTML",
             reply_to_message_id=sent_album[0].message_id,
             reply_markup=kb_buy(post_id, pid)
@@ -415,9 +398,47 @@ async def _send_flash_post(bot: Bot, product: dict):
             await db.commit()
 
         await schedule_post_expiry(bot, post_id, duration * 60)
-        logger.info("✅ Flash post muvaffaqiyatli yuborildi")
-        
+        logger.info("✅ Flash post yuborildi: %s post_id=%d", pid, post_id)
     except Exception as e:
         logger.error(f"Yuborishda xato: {e}")
-        # Xatoni profilingizga yuboradi, nima xato bo'lganini ko'rasiz
         await bot.send_message(config.admin_id, f"❌ Guruhga yuborishda xato: <code>{e}</code>")
+
+# ── Sotib olaman ──────────────────────────────────────────
+
+async def cb_buy(call: types.CallbackQuery, bot: Bot):
+    parts      = call.data.split(":", 2)
+    post_id    = int(parts[1])
+    product_id = parts[2]
+
+    post = await get_flash_post(post_id)
+    if not post or post["is_expired"]:
+        await call.answer("⛔️ Aksiya yakunlangan!", show_alert=True); return
+
+    buyer = call.from_user
+    if await has_already_requested(post_id, buyer.id):
+        await call.answer("ℹ️ Allaqachon so'rov yuborgansiz!", show_alert=True); return
+
+    product = await get_product(product_id)
+    if not product:
+        await call.answer("❌ Mahsulot topilmadi.", show_alert=True); return
+
+    await create_purchase_request(post_id, product_id, buyer.id, buyer.username, buyer.full_name)
+
+    # Bazadan chat ID ni yana bir bor tekshirish
+    db_chat_id = await get_setting("group_chat_id")
+    target_chat_id = int(db_chat_id) if db_chat_id and db_chat_id != "0" else config.group_chat_id
+
+    uname = f"@{buyer.username}" if buyer.username else f"<b>{buyer.full_name}</b>"
+    await bot.send_message(
+        target_chat_id,
+        f"🎉 {uname} ushbu mahsulotni (<code>{product_id}</code>) xarid qilmoqchi!\n"
+        "👥 <i>Adminlar tez orada aloqaga chiqadi.</i>",
+        parse_mode="HTML",
+        reply_to_message_id=post["text_message_id"]
+    )
+    await bot.send_message(
+        config.admin_id,
+        build_admin_notify(buyer.full_name, buyer.username, buyer.id, product_id, product["name"], product["sale_price"]),
+        parse_mode="HTML"
+    )
+    await call.answer("✅ So'rovingiz qabul qilindi! Admin tez orada bog'lanadi.", show_alert=True)
