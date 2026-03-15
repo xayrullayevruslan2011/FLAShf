@@ -26,7 +26,7 @@ async def load_group_chat_id():
     else:
         # Agar bazada hali yo'q bo'lsa, o'zingizning guruh ID-ingizni 
         # vaqtincha shu yerga yozib qo'ysangiz ham bo'ladi
-        config.group_chat_id = -1003639623716
+        config.group_chat_id = -1001234567890
 
 async def save_group_chat_id(chat_id: int):
     from database import set_setting
