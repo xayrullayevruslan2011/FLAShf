@@ -2,3 +2,4 @@ aiogram==2.23.1
 aiosqlite
 flask
 python-dotenv
+apscheduler
