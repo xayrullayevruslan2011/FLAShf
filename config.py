@@ -9,7 +9,7 @@ class Config:
     def __init__(self):
         self.bot_token     = os.environ.get("BOT_TOKEN", "")
         self.admin_id      = int(os.environ.get("ADMIN_ID", "0"))
-        self.group_chat_id = 0
+        self.group_chat_id = -1001234567890
         if not self.bot_token:
             raise ValueError("BOT_TOKEN topilmadi!")
 
