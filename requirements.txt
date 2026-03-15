@@ -1,4 +1,4 @@
-aiogram>=3.13.0
+aiogram==2.23.1
 aiosqlite
 flask
 python-dotenv
