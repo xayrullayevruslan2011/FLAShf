@@ -18,7 +18,8 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 
 import os
-DB_PATH = os.path.join(os.environ.get("DATA_DIR", "."), "flash_sale.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 # ════════════════════════════════════════════════════════════
 #  DDL — Jadvallar
