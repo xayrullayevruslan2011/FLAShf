@@ -74,7 +74,7 @@ def register(dp: Dispatcher):
     # Admin panel
     dp.register_message_handler(cmd_flash,  commands=["flash"])
     dp.register_message_handler(cmd_status, commands=["status"])
-    dp.register_message_handler(cmd_set_group, commands=["setgroup"])
+    dp.register_message_handler(cmd_set_group, commands=["setgroup"]) # <-- YANGI
     
     dp.register_callback_query_handler(cb_panel_add,      lambda c: c.data == "panel_add")
     dp.register_callback_query_handler(cb_panel_list,     lambda c: c.data == "panel_list")
@@ -156,7 +156,10 @@ async def cmd_status(message: types.Message, bot: Bot):
         return
     # Statusda ham bazani tekshiramiz
     db_id = await get_setting("group_chat_id")
-    current_id = int(db_id) if db_id and db_id != "0" else config.group_chat_id
+    try:
+        current_id = int(db_id) if db_id and db_id != "0" else config.group_chat_id
+    except:
+        current_id = config.group_chat_id
     
     if current_id == 0:
         g = "❌ Guruh sozlanmagan"
@@ -359,12 +362,12 @@ async def _send_flash_post(bot: Bot, product: dict):
     # 1. Bazadan ID ni olamiz
     db_chat_id = await get_setting("group_chat_id")
     
-    # 2. ID ni butun son formatiga o'tkazamiz
+    # 2. ID ni butun son formatiga o'tkazamiz (MUHIM!) 
     try:
         if db_chat_id and db_chat_id != "0":
             target_chat_id = int(db_chat_id)
         else:
-            target_chat_id = config.group_chat_id
+            target_chat_id = int(config.group_chat_id)
     except (ValueError, TypeError):
         target_chat_id = 0
     
@@ -384,7 +387,7 @@ async def _send_flash_post(bot: Bot, product: dict):
             input_media.append(InputMediaVideo(media=row["file_id"]))
 
     try:
-        # Guruhga yuborish
+        # Guruhga yuborish (chat_id endi integer) 
         sent_album = await bot.send_media_group(chat_id=target_chat_id, media=input_media)
         album_ids  = [m.message_id for m in sent_album]
 
@@ -444,13 +447,15 @@ async def cb_buy(call: types.CallbackQuery, bot: Bot):
     uname = f"@{buyer.username}" if buyer.username else f"<b>{buyer.full_name}</b>"
     
     if target_chat_id != 0:
-        await bot.send_message(
-            target_chat_id,
-            f"🎉 {uname} ushbu mahsulotni (<code>{product_id}</code>) xarid qilmoqchi!\n"
-            "👥 <i>Adminlar tez orada aloqaga chiqadi.</i>",
-            parse_mode="HTML",
-            reply_to_message_id=post["text_message_id"]
-        )
+        try:
+            await bot.send_message(
+                target_chat_id,
+                f"🎉 {uname} ushbu mahsulotni (<code>{product_id}</code>) xarid qilmoqchi!\n"
+                "👥 <i>Adminlar tez orada aloqaga chiqadi.</i>",
+                parse_mode="HTML",
+                reply_to_message_id=post["text_message_id"]
+            )
+        except: pass
         
     await bot.send_message(
         config.admin_id,
